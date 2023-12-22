@@ -44,10 +44,31 @@ class Tour {
 		}
 		$once = true;
 
-		$tours = apply_filters( 'tour_list', array() );
-		if ( empty( $tours ) ) {
+		$_tours = apply_filters( 'tour_list', array() );
+		if ( empty( $_tours ) ) {
 			return;
 		}
+		$tours = array_filter(
+			$_tours,
+			function ( $tour, $post_id ) {
+				if ( ! isset( $tour[0]['tour_restrict_url'] ) || empty( $tour[0]['tour_restrict_url'] ) ) {
+					return true;
+				}
+				$restrict_url = esc_url( $tour[0]['tour_restrict_url'] );
+
+				$create_tour_url = admin_url( 'post.php?post=' . esc_html( $post_id ) . '&action=edit' );
+				if ( strpos( $create_tour_url, $_SERVER['REQUEST_URI'] ) !== false ) {
+					return true;
+				}
+
+				$path_to_find = wp_parse_url( $restrict_url, PHP_URL_PATH );
+				if ( $path_to_find && strpos( $_SERVER['REQUEST_URI'], $path_to_find ) !== false ) {
+					return true;
+				}
+				return false;
+			},
+			ARRAY_FILTER_USE_BOTH
+		);
 
 		wp_register_style( 'driver-js', plugins_url( 'assets/css/driver-js.css', __FILE__ ), array(), filemtime( __DIR__ . '/assets/css/driver-js.css' ) );
 		wp_register_style( 'tour-css', plugins_url( 'assets/css/style.css', __FILE__ ), array(), filemtime( __DIR__ . '/assets/css/style.css' ) );
@@ -328,8 +349,9 @@ class Tour {
 
 		$tour = array(
 			array(
-				'color' => sanitize_text_field( $_POST['color'] ),
-				'title' => $data['post_title'],
+				'color'             => sanitize_text_field( $_POST['color'] ),
+				'title'             => $data['post_title'],
+				'tour_restrict_url' => ! empty( $_POST['tour_restrict_url'] ) ? esc_url_raw( $_POST['tour_restrict_url'] ) : '',
 			),
 		);
 
@@ -419,10 +441,12 @@ class Tour {
 
 		$tour = self::json_decode( $post->post_content );
 		if ( ! $tour ) {
-			$color = '#3939c7';
-			$tour  = array();
+			$color    = '#3939c7';
+			$tour     = array();
+			$tour_url = '';
 		} else {
-			$color = $tour[0]['color'];
+			$color    = $tour[0]['color'];
+			$tour_url = esc_url( $tour[0]['tour_restrict_url'] );
 			array_shift( $tour );
 		}
 
@@ -435,6 +459,18 @@ class Tour {
 					<input type="color" name="color" id="tour_color" value="<?php echo esc_attr( $color ); ?>" />
 				</td>
 			</tr>
+		</table>
+	</div>
+	<div id="tour-url">
+		<table class="form-table">
+			<tbody>
+				<tr>
+					<th scope="row"><label><?php esc_html_e( 'Restrict Tour to URL', 'tour' ); ?></label><br></th>
+					<td>
+						<input type="url" name="tour_restrict_url" id="tour_restrict_url" class="regular-text" value="<?php echo esc_url( $tour_url ); ?>"/>
+					</td>
+				</tr>
+			</tbody>
 		</table>
 	</div>
 	<div id="steps">
